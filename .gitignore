@@ -1,0 +1,22 @@
+# Python
+airesvenv/
+venv/
+__pycache__/
+*.pyc
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+
+# Node
+node_modules/
+
+# Build files
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
