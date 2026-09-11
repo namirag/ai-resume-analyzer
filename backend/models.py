@@ -20,3 +20,24 @@ class JobDescription(Base):
     title = Column(String(255), nullable=True)
     description = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class Analysis(Base):
+    __tablename__ = "analyses"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    resume_id = Column(Integer, nullable=False)
+    job_id = Column(Integer, nullable=False)
+
+    match_score = Column(Integer, nullable=False)
+
+    matching_skills = Column(Text, nullable=True)
+    missing_skills = Column(Text, nullable=True)
+    strengths = Column(Text, nullable=True)
+    recommendations = Column(Text, nullable=True)
+    interview_questions = Column(Text, nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
