@@ -1,12 +1,14 @@
 import io
-from fastapi import FastAPI, UploadFile, File
+import json
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
-from database import Base, engine
-from models import Resume, JobDescription
+from database import Base, engine, SessionLocal
+from models import Resume, JobDescription, Analysis
+from ai_service import analyze_resume
 from pydantic import BaseModel
 from pypdf import PdfReader
 from docx import Document
-from database import SessionLocal
 
 
 Base.metadata.create_all(bind=engine)
@@ -15,6 +17,14 @@ app = FastAPI(
     title="AI Resume Analyzer",
     description="A FastAPI application for analyzing resumes using AI.",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 class JobDescriptionCreate(BaseModel):
@@ -109,25 +119,56 @@ def create_job(job: JobDescriptionCreate):
     }
 
 @app.get("/match/{resume_id}/{job_id}")
-def get_match_data(resume_id: int, job_id: int):
+def analyze_resume_match(resume_id: int, job_id: int):
     db = SessionLocal()
 
     resume = db.query(Resume).filter(Resume.id == resume_id).first()
     job = db.query(JobDescription).filter(JobDescription.id == job_id).first()
 
-    db.close()
-
     if not resume:
-        return {"error": "Resume not found"}
+        db.close()
+        raise HTTPException(
+            status_code=404,
+            detail="Resume not found"
+        )
 
     if not job:
-        return {"error": "Job description not found"}
+        db.close()
+        raise HTTPException(
+            status_code=404,
+            detail="Job description not found"
+        )
 
-    return {
+    # Analyze resume using AI
+    analysis = analyze_resume(
+        resume.extracted_text,
+        job.description
+    )
+
+    # Save analysis to PostgreSQL
+    analysis_record = Analysis(
+        resume_id=resume.id,
+        job_id=job.id,
+        match_score=analysis.match_score,
+        matching_skills=json.dumps(analysis.matching_skills),
+        missing_skills=json.dumps(analysis.missing_skills),
+        strengths=json.dumps(analysis.strengths),
+        recommendations=json.dumps(analysis.recommendations),
+        interview_questions=json.dumps(analysis.interview_questions)
+    )
+
+    db.add(analysis_record)
+    db.commit()
+    db.refresh(analysis_record)
+
+    result = {
+        "analysis_id": analysis_record.id,
         "resume_id": resume.id,
-        "resume_filename": resume.filename,
-        "resume_text": resume.extracted_text,
         "job_id": job.id,
         "job_title": job.title,
-        "job_description": job.description
+        "analysis": analysis.model_dump()
     }
+
+    db.close()
+
+    return result
